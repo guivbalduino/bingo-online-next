@@ -140,14 +140,37 @@ export default function AdminPage() {
 
   const renderCard = (card: BingoCard) => {
     const allNumbers = card.numbers;
+    
+    // Create a 25-element grid, inserting the FREE space in the middle (index 12)
+    const gridItems: (number | 'FREE')[] = [
+        ...allNumbers.slice(0, 12),
+        'FREE',
+        ...allNumbers.slice(12)
+    ];
+
     return (
-        <div className="flex flex-wrap gap-2 justify-center">
-            {allNumbers.sort((a,b) => a-b).map((number, index) => {
+        <div className="grid grid-cols-5 gap-2 justify-center">
+            {["B", "I", "N", "G", "O"].map(letter => (
+                <div key={letter} className="text-center font-bold text-yellow-500 text-2xl mb-2">{letter}</div>
+            ))}
+            {gridItems.map((item, index) => {
+                const cellIndex = index % 25; // Normalize index for a 5x5 grid
+                const visualIndex = index >= 5 ? index -5 : index;
+                if (item === 'FREE') {
+                    return (
+                        <div key="free" className="w-16 h-16 flex items-center justify-center rounded-lg font-bold bg-green-600 text-white shadow-md">
+                            FREE
+                        </div>
+                    );
+                }
+                
+                const number = item;
                 const isDrawn = drawnNumbers.includes(number);
+                
                 return (
                     <div 
                         key={index} 
-                        className={`w-16 h-16 flex items-center justify-center rounded-full text-lg font-bold shadow-md ${isDrawn ? 'bg-green-500 text-white' : 'bg-gray-700'}`}
+                        className={`w-16 h-16 flex items-center justify-center rounded-lg text-lg font-bold shadow-md ${isDrawn ? 'bg-green-500 text-white' : 'bg-gray-700'}`}
                     >
                         {number}
                     </div>
