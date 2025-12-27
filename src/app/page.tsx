@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { BingoState, saveState, loadState, saveCurrentAsPrevious, loadPreviousState } from "@/lib/state";
 import { getInitialNumbers, BINGO_COLUMNS } from "@/lib/config";
-import random from "lodash/random"; // Using lodash for random choice
+
 
 export default function Home() {
     const [gameState, setGameState] = useState<BingoState>({
@@ -38,7 +38,7 @@ export default function Home() {
 
     const drawNumber = useCallback(() => {
         if (gameState.remainingNumbers.length > 0) {
-            const randomIndex = random(0, gameState.remainingNumbers.length - 1);
+            const randomIndex = Math.floor(Math.random() * gameState.remainingNumbers.length);
             const drawnNumber = gameState.remainingNumbers[randomIndex];
 
             const newDrawnNumbers = [...gameState.drawnNumbers, drawnNumber];
