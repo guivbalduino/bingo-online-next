@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bingo Online 🎰
 
-## Getting Started
+Um jogo de bingo online com uma interface limpa, sorteio de números em tempo real e um painel especial para os jogadores conferirem suas cartelas. Inclui também uma página de configurações para personalizar os padrões de vitória.
 
-First, run the development server:
+## 📸 Telas da Aplicação
+
+### Tela Principal
+![Tela Principal](./assets/principal.png)
+
+### Painel da Cartela do Jogador
+![Painel da Cartela](./assets/admin.png)
+
+### Página de Configurações
+![Página de Configurações](./assets/settings.png)
+
+## ✨ Funcionalidades
+
+- **Sorteio em Tempo Real:** Sorteio de números com feedback de áudio para cada número sorteado.
+- **Visualização Completa:** Exibição dos números já sorteados, números restantes e estatísticas por coluna.
+- **Painel do Jogador (`/admin`):**
+    - Envie uma imagem da sua cartela de bingo.
+    - A aplicação utiliza OCR (Reconhecimento Óptico de Caracteres) para ler os números da sua cartela.
+    - Acompanhe em tempo real quais números da sua cartela já foram sorteados.
+    - Verifique o status de vitória com base nos padrões configurados.
+- **Padrões de Vitória Customizáveis (`/settings`):**
+    - Uma página de configurações para habilitar ou desabilitar diferentes padrões de vitória (4 cantos, terço, quina, cartela cheia).
+    - Configure variações para os padrões, como linhas horizontais, verticais ou diagonais.
+- **Estatísticas da Cartela:** O painel do jogador exibe estatísticas em tempo real, mostrando se um padrão de vitória foi alcançado.
+
+## 🚀 Tecnologias Utilizadas
+
+- **[Next.js](https://nextjs.org/)** - Framework React para produção.
+- **[TypeScript](https://www.typescriptlang.org/)** - Superset de JavaScript que adiciona tipagem estática.
+- **[Tailwind CSS](https://tailwindcss.com/)** - Framework de CSS para design rápido e responsivo.
+- **[Tesseract.js](https://tesseract.projectnaptha.com/)** - Biblioteca de OCR para extrair números das imagens das cartelas.
+
+## 🏁 Como Executar o Projeto
+
+Primeiro, instale as dependências:
+
+```bash
+npm install
+```
+
+Depois, execute o servidor de desenvolvimento:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abra [http://localhost:3000](http://localhost:3000) no seu navegador para ver o resultado.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📄 Páginas
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Página Principal (`/`)**: A tela principal do jogo de bingo, onde os números são sorteados e exibidos na tabela.
+- **Painel da Cartela (`/admin`)**: A página onde os jogadores podem enviar e verificar suas cartelas.
+- **Configurações (`/settings`)**: A página para configurar os padrões de vitória do jogo.

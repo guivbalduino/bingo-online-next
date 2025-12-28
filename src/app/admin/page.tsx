@@ -5,6 +5,7 @@ import { BingoCard, saveCard, loadCard, clearCard } from '@/lib/card-state';
 import { BingoState, loadState } from '@/lib/state';
 import Tesseract from 'tesseract.js';
 import CardVerificationGrid from '@/components/CardVerificationGrid';
+import WinningPatternStats from '@/components/WinningPatternStats';
 
 const BINGO_GAME_STORAGE_KEY = 'bingoGameState';
 
@@ -183,14 +184,17 @@ export default function AdminPage() {
   const renderContent = () => {
     if (userCard) {
       return (
-        <div className="flex flex-col items-center gap-4">
-          {renderCard(userCard)}
-          <button
-            onClick={handleClearCard}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors mt-4"
-          >
-            Remover Cartela
-          </button>
+        <div className="flex flex-row gap-8">
+            <div className="flex flex-col items-center gap-4">
+              {renderCard(userCard)}
+              <button
+                onClick={handleClearCard}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors mt-4"
+              >
+                Remover Cartela
+              </button>
+            </div>
+            <WinningPatternStats card={userCard} drawnNumbers={drawnNumbers} />
         </div>
       );
     }
@@ -233,7 +237,7 @@ export default function AdminPage() {
       </header>
 
       <main className="flex-1 flex flex-col items-center gap-8">
-        <div className="w-full max-w-md bg-gray-800 p-6 rounded-lg shadow-lg">
+        <div className="w-full max-w-4xl bg-gray-800 p-6 rounded-lg shadow-lg">
           <h2 className="text-2xl font-semibold mb-4 text-center">Sua Cartela</h2>
           {renderContent()}
         </div>
