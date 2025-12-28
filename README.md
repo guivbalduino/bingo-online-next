@@ -22,7 +22,7 @@ Um jogo de bingo online com uma interface limpa, sorteio de números em tempo re
     - A aplicação utiliza OCR (Reconhecimento Óptico de Caracteres) para ler os números da sua cartela.
     - Acompanhe em tempo real quais números da sua cartela já foram sorteados.
     - Verifique o status de vitória com base nos padrões configurados.
-- **Padrões de Vitória Customizáveis (`/settings`):**
+- **Padrões de Vitória Customizáveis (`/settings`):
     - Uma página de configurações para habilitar ou desabilitar diferentes padrões de vitória (4 cantos, terço, quina, cartela cheia).
     - Configure variações para os padrões, como linhas horizontais, verticais ou diagonais.
 - **Estatísticas da Cartela:** O painel do jogador exibe estatísticas em tempo real, mostrando se um padrão de vitória foi alcançado.

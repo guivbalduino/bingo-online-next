@@ -3,55 +3,17 @@
 import { useMemo, useState, useEffect } from 'react';
 import { BingoCard } from '@/lib/card-state';
 import { WinningPattern, loadWinningPatterns } from '@/lib/winning-patterns';
+import { QUINA_LINES, TERCO_LINES, Coordinate } from '@/lib/grid-utils';
 
 interface WinningPatternStatsProps {
     card: BingoCard;
     drawnNumbers: number[];
 }
 
-// Helper function to check if a set of numbers has been drawn
-const hasBeenDrawn = (numbersToCheck: (number | 'FREE')[], drawnNumbers: number[]): boolean => {
-    return numbersToCheck.every(num => num === 'FREE' || drawnNumbers.includes(num));
-};
-
-// Generates all possible lines of a given length for a grid
-const getLines = (grid: (number | 'FREE')[][], length: number) => {
-    const lines = { horizontal: [], vertical: [], diagonal: [] };
-
-    // Horizontal and Vertical lines
-    for (let i = 0; i < 5; i++) {
-        for (let j = 0; j <= 5 - length; j++) {
-            lines.horizontal.push(grid[i].slice(j, j + length));
-            const verticalSlice = [];
-            for (let k = 0; k < length; k++) {
-                verticalSlice.push(grid[j + k][i]);
-            }
-            lines.vertical.push(verticalSlice);
-        }
-    }
-    
-    // Diagonal lines
-    for (let i = 0; i <= 5 - length; i++) {
-        const diag1 = [];
-        const diag2 = [];
-        for (let k = 0; k < length; k++) {
-            diag1.push(grid[i + k][i + k]);
-            diag2.push(grid[i + k][(5 - 1 - i) - k]);
-        }
-        lines.diagonal.push(diag1);
-        lines.diagonal.push(diag2);
-    }
-    // Add remaining anti-diagonals for smaller lengths
-    if (length < 5) {
-        for (let i = 1; i <= 5 - length; i++) {
-            const antiDiag = [];
-            for (let k = 0; k < length; k++) {
-                antiDiag.push(grid[i + k][(5 - 1) - k]);
-            }
-            lines.diagonal.push(antiDiag);
-        }
-    }
-    return lines;
+// Helper function to check if a line (by coordinates) has been drawn
+const hasLineBeenDrawn = (line: Coordinate[], grid: (number | 'FREE')[][], drawnNumbers: number[]): boolean => {
+    const numbersToCheck = line.map(([r, c]) => grid[r][c]);
+    return numbersToCheck.every(num => num === 'FREE' || (typeof num === 'number' && drawnNumbers.includes(num)));
 };
 
 
@@ -72,11 +34,13 @@ export default function WinningPatternStats({ card, drawnNumbers }: WinningPatte
         };
     }, []);
     
+    // Reconstruct the 5x5 grid from the flat 24-number array
     const grid: (number | 'FREE')[][] = useMemo(() => {
         const newGrid: (number | 'FREE')[][] = Array(5).fill(null).map(() => Array(5).fill(null));
         let cardIdx = 0;
         for (let r = 0; r < 5; r++) {
             for (let c = 0; c < 5; c++) {
+                // The center cell is always FREE
                 if (r === 2 && c === 2) {
                     newGrid[r][c] = 'FREE';
                 } else {
@@ -89,59 +53,64 @@ export default function WinningPatternStats({ card, drawnNumbers }: WinningPatte
 
 
     const stats = useMemo(() => {
-        const results: { [key: string]: { name: string, completed: boolean, completedCount: number } } = {};
+        const results: { [key: string]: { name: string, completed: boolean } } = {};
 
         for (const pattern of activePatterns) {
             if (!pattern.enabled) continue;
 
             let completed = false;
-            let completedCount = 0;
 
             switch (pattern.id) {
                 case '4_corners':
-                    const corners = [grid[0][0], grid[0][4], grid[4][0], grid[4][4]];
-                    completed = hasBeenDrawn(corners, drawnNumbers);
+                    const corners: Coordinate[] = [[0, 0], [0, 4], [4, 0], [4, 4]];
+                    completed = hasLineBeenDrawn(corners, grid, drawnNumbers);
                     break;
                 
                 case 'full_card':
-                    completed = hasBeenDrawn(card.numbers, drawnNumbers);
+                    const allCardCoordinates: Coordinate[] = [];
+                    for(let r=0; r<5; r++) {
+                        for(let c=0; c<5; c++) {
+                            if (r !== 2 || c !== 2) { // Exclude FREE space
+                                allCardCoordinates.push([r, c]);
+                            }
+                        }
+                    }
+                    completed = hasLineBeenDrawn(allCardCoordinates, grid, drawnNumbers);
                     break;
 
                 case 'quina':
-                    const quinaLines = getLines(grid, 5);
                     let quinaCompleted = false;
                     if (pattern.subPatterns?.find(sp => sp.id === 'quina_horizontal')?.enabled) {
-                        if (quinaLines.horizontal.some(line => hasBeenDrawn(line, drawnNumbers))) quinaCompleted = true;
+                        if (QUINA_LINES.horizontal.some(line => hasLineBeenDrawn(line, grid, drawnNumbers))) quinaCompleted = true;
                     }
                     if (!quinaCompleted && pattern.subPatterns?.find(sp => sp.id === 'quina_vertical')?.enabled) {
-                         if (quinaLines.vertical.some(line => hasBeenDrawn(line, drawnNumbers))) quinaCompleted = true;
+                         if (QUINA_LINES.vertical.some(line => hasLineBeenDrawn(line, grid, drawnNumbers))) quinaCompleted = true;
                     }
                     if (!quinaCompleted && pattern.subPatterns?.find(sp => sp.id === 'quina_diagonal')?.enabled) {
-                        if (quinaLines.diagonal.some(line => hasBeenDrawn(line, drawnNumbers))) quinaCompleted = true;
+                        if (QUINA_LINES.diagonal.some(line => hasLineBeenDrawn(line, grid, drawnNumbers))) quinaCompleted = true;
                     }
                     completed = quinaCompleted;
                     break;
                 
                 case 'terco':
-                     const tercoLines = getLines(grid, 3);
                      let tercoCompleted = false;
                       if (pattern.subPatterns?.find(sp => sp.id === 'terco_horizontal')?.enabled) {
-                        if (tercoLines.horizontal.some(line => hasBeenDrawn(line, drawnNumbers))) tercoCompleted = true;
+                        if (TERCO_LINES.horizontal.some(line => hasLineBeenDrawn(line, grid, drawnNumbers))) tercoCompleted = true;
                     }
                     if (!tercoCompleted && pattern.subPatterns?.find(sp => sp.id === 'terco_vertical')?.enabled) {
-                         if (tercoLines.vertical.some(line => hasBeenDrawn(line, drawnNumbers))) tercoCompleted = true;
+                         if (TERCO_LINES.vertical.some(line => hasLineBeenDrawn(line, grid, drawnNumbers))) tercoCompleted = true;
                     }
                     if (!tercoCompleted && pattern.subPatterns?.find(sp => sp.id === 'terco_diagonal')?.enabled) {
-                        if (tercoLines.diagonal.some(line => hasBeenDrawn(line, drawnNumbers))) tercoCompleted = true;
+                        if (TERCO_LINES.diagonal.some(line => hasLineBeenDrawn(line, grid, drawnNumbers))) tercoCompleted = true;
                     }
                     completed = tercoCompleted;
                     break;
             }
-            results[pattern.id] = { name: pattern.name, completed, completedCount: 0 }; // Set count to 0 as it's not needed
+            results[pattern.id] = { name: pattern.name, completed };
         }
 
         return results;
-    }, [grid, drawnNumbers, activePatterns, card.numbers]);
+    }, [grid, drawnNumbers, activePatterns]);
 
     return (
         <div className="w-full max-w-md bg-gray-800 p-6 rounded-lg shadow-lg">
