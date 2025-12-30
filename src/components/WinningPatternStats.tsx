@@ -1,13 +1,33 @@
 "use client";
 
-import { useMemo, useState, useEffect } from 'react';
-import { BingoCard } from '@/lib/card-state';
+import { useMemo } from 'react';
 import { WinningPattern, loadWinningPatterns } from '@/lib/winning-patterns';
 import { QUINA_LINES, TERCO_LINES, Coordinate } from '@/lib/grid-utils';
 
+// This is a simplified version of the BingoCard interface.
+// In a real app, this would be a shared type.
+interface BingoCard {
+    numbers: number[];
+}
+
+interface DirectionalPattern {
+    enabled: boolean;
+    horizontal: boolean;
+    vertical: boolean;
+    diagonal: boolean;
+}
+
+interface WinningPatternsConfig {
+    full_card: boolean;
+    four_corners: boolean;
+    quina: DirectionalPattern;
+    terco: DirectionalPattern;
+}
+
 interface WinningPatternStatsProps {
-    card: BingoCard;
+    card?: BingoCard;
     drawnNumbers: number[];
+    patterns?: WinningPatternsConfig;
 }
 
 // Helper function to check if a line (by coordinates) has been drawn
@@ -18,24 +38,11 @@ const hasLineBeenDrawn = (line: Coordinate[], grid: (number | 'FREE')[][], drawn
 
 
 export default function WinningPatternStats({ card, drawnNumbers }: WinningPatternStatsProps) {
-    const [activePatterns, setActivePatterns] = useState(() => loadWinningPatterns());
+    const activePatterns = loadWinningPatterns();
 
-    useEffect(() => {
-        const handleStorageChange = (event: StorageEvent) => {
-            if (event.key === 'bingoWinningPatterns') {
-                setActivePatterns(loadWinningPatterns());
-            }
-        };
-
-        window.addEventListener('storage', handleStorageChange);
-
-        return () => {
-            window.removeEventListener('storage', handleStorageChange);
-        };
-    }, []);
-    
     // Reconstruct the 5x5 grid from the flat 24-number array
     const grid: (number | 'FREE')[][] = useMemo(() => {
+        if (!card) return [];
         const newGrid: (number | 'FREE')[][] = Array(5).fill(null).map(() => Array(5).fill(null));
         let cardIdx = 0;
         for (let r = 0; r < 5; r++) {
@@ -53,6 +60,7 @@ export default function WinningPatternStats({ card, drawnNumbers }: WinningPatte
 
 
     const stats = useMemo(() => {
+        if (!card) return {};
         const results: { [key: string]: { name: string, completed: boolean } } = {};
 
         for (const pattern of activePatterns) {
@@ -65,11 +73,11 @@ export default function WinningPatternStats({ card, drawnNumbers }: WinningPatte
                     const corners: Coordinate[] = [[0, 0], [0, 4], [4, 0], [4, 4]];
                     completed = hasLineBeenDrawn(corners, grid, drawnNumbers);
                     break;
-                
+
                 case 'full_card':
                     const allCardCoordinates: Coordinate[] = [];
-                    for(let r=0; r<5; r++) {
-                        for(let c=0; c<5; c++) {
+                    for (let r = 0; r < 5; r++) {
+                        for (let c = 0; c < 5; c++) {
                             if (r !== 2 || c !== 2) { // Exclude FREE space
                                 allCardCoordinates.push([r, c]);
                             }
@@ -84,21 +92,21 @@ export default function WinningPatternStats({ card, drawnNumbers }: WinningPatte
                         if (QUINA_LINES.horizontal.some(line => hasLineBeenDrawn(line, grid, drawnNumbers))) quinaCompleted = true;
                     }
                     if (!quinaCompleted && pattern.subPatterns?.find(sp => sp.id === 'quina_vertical')?.enabled) {
-                         if (QUINA_LINES.vertical.some(line => hasLineBeenDrawn(line, grid, drawnNumbers))) quinaCompleted = true;
+                        if (QUINA_LINES.vertical.some(line => hasLineBeenDrawn(line, grid, drawnNumbers))) quinaCompleted = true;
                     }
                     if (!quinaCompleted && pattern.subPatterns?.find(sp => sp.id === 'quina_diagonal')?.enabled) {
                         if (QUINA_LINES.diagonal.some(line => hasLineBeenDrawn(line, grid, drawnNumbers))) quinaCompleted = true;
                     }
                     completed = quinaCompleted;
                     break;
-                
+
                 case 'terco':
-                     let tercoCompleted = false;
-                      if (pattern.subPatterns?.find(sp => sp.id === 'terco_horizontal')?.enabled) {
+                    let tercoCompleted = false;
+                    if (pattern.subPatterns?.find(sp => sp.id === 'terco_horizontal')?.enabled) {
                         if (TERCO_LINES.horizontal.some(line => hasLineBeenDrawn(line, grid, drawnNumbers))) tercoCompleted = true;
                     }
                     if (!tercoCompleted && pattern.subPatterns?.find(sp => sp.id === 'terco_vertical')?.enabled) {
-                         if (TERCO_LINES.vertical.some(line => hasLineBeenDrawn(line, grid, drawnNumbers))) tercoCompleted = true;
+                        if (TERCO_LINES.vertical.some(line => hasLineBeenDrawn(line, grid, drawnNumbers))) tercoCompleted = true;
                     }
                     if (!tercoCompleted && pattern.subPatterns?.find(sp => sp.id === 'terco_diagonal')?.enabled) {
                         if (TERCO_LINES.diagonal.some(line => hasLineBeenDrawn(line, grid, drawnNumbers))) tercoCompleted = true;
@@ -110,7 +118,16 @@ export default function WinningPatternStats({ card, drawnNumbers }: WinningPatte
         }
 
         return results;
-    }, [grid, drawnNumbers, activePatterns]);
+    }, [grid, drawnNumbers, activePatterns, card]);
+
+    if (!card) {
+        return (
+            <div className="w-full max-w-md bg-gray-800 p-6 rounded-lg shadow-lg">
+                <h2 className="text-2xl font-semibold mb-4 text-center">Estatísticas da Cartela</h2>
+                <p className="text-center text-gray-400">Nenhuma cartela selecionada.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="w-full max-w-md bg-gray-800 p-6 rounded-lg shadow-lg">

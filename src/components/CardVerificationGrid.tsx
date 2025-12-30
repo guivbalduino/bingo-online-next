@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { DndContext, DragOverlay, useSensor, useSensors, PointerSensor, DragStartEvent, DragEndEvent, useDraggable, useDroppable } from '@dnd-kit/core';
 
 const BINGO_COLUMNS: Record<number, { min: number; max: number; label: string }> = {
@@ -19,11 +20,14 @@ interface CardVerificationGridProps {
 
 // --- Reusable Draggable Component ---
 function Draggable({ id, data, children }: { id: string; data: object; children: React.ReactNode }) {
-    const { attributes, listeners, setNodeRef, transform } = useDraggable({ id, data });
-    const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 1000 } : {};
+    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id, data });
+    // When using DragOverlay, we hide the original item while dragging instead of moving it
+    const style: React.CSSProperties = {
+        opacity: isDragging ? 0.3 : 1, // Changed to 0.3 for debug
+    };
 
     return (
-        <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
+        <div ref={setNodeRef} style={style} {...listeners} {...attributes} className="touch-none">
             {children}
         </div>
     );
@@ -34,7 +38,7 @@ function BankColumn({ id, colLabel, children }: { id: string; colLabel: string; 
     return (
         <div ref={setNodeRef} className="flex flex-col items-center p-2 rounded-md min-w-[70px]">
             <p className="font-bold text-yellow-500 mb-2">{colLabel}</p>
-            <div className="flex flex-col gap-2 h-48 overflow-y-auto p-1">
+            <div className="flex flex-col gap-2 h-48 overflow-y-auto p-1 bg-gray-800 rounded-md border border-gray-600">
                 {children}
             </div>
         </div>
@@ -46,7 +50,11 @@ export default function CardVerificationGrid({ initialNumbers, onSave, onCancel 
     const [availableNumbers, setAvailableNumbers] = useState<Record<string, number[]>>({});
     const [activeNumber, setActiveNumber] = useState<number | null>(null);
 
-    const sensors = useSensors(useSensor(PointerSensor));
+    const sensors = useSensors(useSensor(PointerSensor, {
+        activationConstraint: {
+            distance: 8,
+        },
+    }));
 
     useEffect(() => {
         const newGrid = Array(5).fill(null).map(() => Array(5).fill(null));
@@ -79,26 +87,37 @@ export default function CardVerificationGrid({ initialNumbers, onSave, onCancel 
                 }
             }
         }
-        
+
         setGrid(newGrid);
         setAvailableNumbers(availableBank);
     }, [initialNumbers]);
 
     const handleDragStart = (event: DragStartEvent) => {
-        setActiveNumber(event.active.data.current?.number);
+        console.log("Drag Start:", event.active);
+        const num = event.active.data.current?.number;
+        console.log("Active number extracted:", num);
+        setActiveNumber(num);
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
-        setActiveNumber(null);
         const { active, over } = event;
+        console.log("Drag End. Active:", active.id, "Over:", over?.id);
 
-        if (!over || !active.data.current) return;
+        setActiveNumber(null);
+
+        if (!over || !active.data.current) {
+            console.log("Dropped on nothing or no data");
+            return;
+        }
 
         const sourceId = active.id as string;
         const targetId = over.id as string;
         const draggedNumber = active.data.current.number as number;
 
-        if (sourceId === targetId) return;
+        if (sourceId === targetId) {
+            console.log("Dropped on self");
+            return;
+        }
 
         const isSourceCell = sourceId.startsWith('cell-');
         const isTargetCell = targetId.startsWith('cell-');
@@ -120,7 +139,7 @@ export default function CardVerificationGrid({ initialNumbers, onSave, onCancel 
                 alert(`Número ${draggedNumber} não pertence à coluna ${targetColInfo.label}.`);
                 return;
             }
-            
+
             if (isSourceCell) {
                 // == Case: Cell -> Cell ==
                 const [, sr, sc] = sourceId.split('-');
@@ -135,7 +154,7 @@ export default function CardVerificationGrid({ initialNumbers, onSave, onCancel 
                         return;
                     }
                 }
-                
+
                 // Perform swap
                 newGrid[rIdx][cIdx] = draggedNumber;
                 newGrid[sourceRIdx][sourceCIdx] = numberInTarget;
@@ -144,13 +163,13 @@ export default function CardVerificationGrid({ initialNumbers, onSave, onCancel 
             } else {
                 // == Case: Bank -> Cell ==
                 const sourceBankLabel = sourceId.split('-')[1];
-                
+
                 // Remove from bank
                 newAvailable[sourceBankLabel] = newAvailable[sourceBankLabel].filter((n: number) => n !== draggedNumber);
-                
+
                 // Place in grid
                 newGrid[rIdx][cIdx] = draggedNumber;
-                
+
                 // Move occupant to bank
                 if (numberInTarget) {
                     const occupantCol = Object.values(BINGO_COLUMNS).find(c => numberInTarget >= c.min && numberInTarget <= c.max);
@@ -168,11 +187,11 @@ export default function CardVerificationGrid({ initialNumbers, onSave, onCancel 
             const targetColKey = Object.keys(BINGO_COLUMNS).find(key => BINGO_COLUMNS[Number(key)].label === targetBankLabel);
 
             if (targetColKey === undefined) return;
-            
+
             const targetColInfo = BINGO_COLUMNS[Number(targetColKey)];
             if (draggedNumber < targetColInfo.min || draggedNumber > targetColInfo.max) {
-                 alert(`Número ${draggedNumber} não pode ser movido para a coluna ${targetBankLabel}.`);
-                 return;
+                alert(`Número ${draggedNumber} não pode ser movido para a coluna ${targetBankLabel}.`);
+                return;
             }
 
             if (isSourceCell) {
@@ -186,7 +205,7 @@ export default function CardVerificationGrid({ initialNumbers, onSave, onCancel 
                 // Add to bank
                 newAvailable[targetBankLabel].push(draggedNumber);
                 newAvailable[targetBankLabel].sort((a: number, b: number) => a - b);
-                
+
                 setGrid(newGrid);
                 setAvailableNumbers(newAvailable);
 
@@ -205,7 +224,7 @@ export default function CardVerificationGrid({ initialNumbers, onSave, onCancel 
             }
         }
     };
-    
+
     const handleSave = () => {
         const finalNumbers: number[] = [];
         for (const row of grid) {
@@ -232,7 +251,7 @@ export default function CardVerificationGrid({ initialNumbers, onSave, onCancel 
                 </div>
             </Draggable>
         ) : null;
-        
+
         return (
             <div ref={setNodeRef} className={`w-12 h-12 rounded-md ${isOver ? 'bg-blue-900' : 'bg-gray-600'}`}>
                 {content}
@@ -245,15 +264,15 @@ export default function CardVerificationGrid({ initialNumbers, onSave, onCancel 
             <div className="flex flex-col items-center gap-4 p-4 bg-gray-700 rounded-lg w-full">
                 <h3 className="text-xl font-bold">Verifique sua Cartela</h3>
                 <p className="text-center text-sm text-gray-300 mb-2">Arraste os números para a posição correta.</p>
-                
+
                 {/* Grid */}
                 <div className="grid grid-cols-5 gap-1 mb-6">
                     {Object.values(BINGO_COLUMNS).map(c => <div key={c.label} className="text-center font-bold text-yellow-500 text-xl">{c.label}</div>)}
-                    {Array.from({ length: 5 }).map((_, r) => 
-                        Array.from({ length: 5 }).map((_, c) => 
+                    {Array.from({ length: 5 }).map((_, r) =>
+                        Array.from({ length: 5 }).map((_, c) =>
                             r === 2 && c === 2
-                            ? <div key="free" className="w-12 h-12 flex items-center justify-center bg-green-600 rounded-md font-bold">FREE</div>
-                            : <Cell key={`${r}-${c}`} r={r} c={c} />
+                                ? <div key="free" className="w-12 h-12 flex items-center justify-center bg-green-600 rounded-md font-bold">FREE</div>
+                                : <Cell key={`${r}-${c}`} r={r} c={c} />
                         )
                     )}
                 </div>
@@ -283,13 +302,18 @@ export default function CardVerificationGrid({ initialNumbers, onSave, onCancel 
                 </div>
             </div>
 
-            <DragOverlay>
-                {activeNumber ? (
-                    <div className="w-12 h-12 flex items-center justify-center font-bold text-lg bg-blue-600 rounded-full shadow-lg">
-                        {activeNumber}
-                    </div>
-                ) : null}
-            </DragOverlay>
+
+
+            {typeof document !== 'undefined' && createPortal(
+                <DragOverlay zIndex={9999}>
+                    {activeNumber ? (
+                        <div className="w-12 h-12 flex items-center justify-center font-bold text-lg bg-blue-600 rounded-full shadow-lg pointer-events-none opacity-90">
+                            {activeNumber}
+                        </div>
+                    ) : null}
+                </DragOverlay>,
+                document.body
+            )}
         </DndContext>
     );
 }
