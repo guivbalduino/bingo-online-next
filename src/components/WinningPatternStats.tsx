@@ -117,6 +117,19 @@ export default function WinningPatternStats({ card, drawnNumbers }: WinningPatte
             results[pattern.id] = { name: pattern.name, completed };
         }
 
+        // Add BINGO Column Completion Stats
+        const COLUMNS = {
+            B: [1, 15], I: [16, 30], N: [31, 45], G: [46, 60], O: [61, 75]
+        };
+
+        Object.entries(COLUMNS).forEach(([label, [min, max]]) => {
+            const range = Array.from({ length: max - min + 1 }, (_, i) => min + i);
+            const completed = range.every(num => drawnNumbers.includes(num));
+            if (completed) {
+                results[`col_${label}`] = { name: `Coluna ${label} (Completa)`, completed: true };
+            }
+        });
+
         return results;
     }, [grid, drawnNumbers, activePatterns, card]);
 

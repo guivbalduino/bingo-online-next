@@ -97,11 +97,19 @@ export default function Home() {
                 }
             });
 
-            // Request current player's data when socket connects
-            if (playerId) {
-                socket.emit('getPlayer', playerId, (playerData: Player) => {
-                    setPlayer(playerData);
-                });
+            // Register current player identification
+            const handleRegister = () => {
+                if (playerId) {
+                    console.log("Registering player:", playerId);
+                    socket.emit('registerPlayer', { playerId });
+                }
+            };
+
+            socket.on('connect', handleRegister);
+
+            // If already connected, register immediately
+            if (socket.connected && playerId) {
+                handleRegister();
             }
 
             return () => {
@@ -110,6 +118,7 @@ export default function Home() {
                 socket.off('gameReset');
                 socket.off('playerUpdated');
                 socket.off('error');
+                socket.off('connect', handleRegister);
             };
         }
     }, [socket, soundEnabled, playerId]);
@@ -191,7 +200,7 @@ export default function Home() {
     return (
         <div className="flex flex-col lg:flex-row min-h-screen bg-gray-900 text-white font-sans">
             {/* Sidebar / Controls */}
-            <aside className="lg:w-1/4 p-4 bg-gray-800 shadow-lg flex flex-col space-y-4">
+            <aside className="w-full md:w-[28rem] flex-shrink-0 p-4 bg-gray-800 shadow-lg flex flex-col space-y-4">
                 <h1 className="text-3xl font-bold text-center mb-4">Bingo Online 🎰</h1>
 
                 {/* Last Number Display */}
@@ -271,12 +280,19 @@ export default function Home() {
                 <div className="mt-6 pt-4 border-t border-gray-700">
                     <h3 className="text-2xl font-semibold mb-3 text-center">Estatísticas</h3>
                     <div className="grid grid-cols-5 gap-2 text-center">
-                        {Object.entries(stats).map(([label, count]) => (
-                            <div key={label} className="bg-gray-700 p-2 rounded-md">
-                                <p className="font-bold text-lg">{label}</p>
-                                <p className="text-xl">{count}</p>
-                            </div>
-                        ))}
+                        {Object.entries(stats).map(([label, count]) => {
+                            // @ts-ignore
+                            const [start, end] = BINGO_COLUMNS[label];
+                            const total = end - start + 1;
+                            const isComplete = count === total;
+
+                            return (
+                                <div key={label} className={`p-2 rounded-md transition-all duration-300 flex flex-col items-center ${isComplete ? 'bg-yellow-500 text-black scale-105 shadow-lg shadow-yellow-500/50' : 'bg-gray-700'}`}>
+                                    <p className="font-bold text-lg">{label}</p>
+                                    <p className="text-xl font-mono">{count}<span className="text-xs opacity-70">/{total}</span></p>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </aside>
@@ -303,68 +319,59 @@ export default function Home() {
             </button>
 
             {/* Main Content / Bingo Grid */}
-            <main className="flex-1 p-4 flex flex-col items-center">
+            <main className={`flex-1 p-4 flex flex-col items-center transition-all duration-300 ${isPlayerPanelOpen ? 'md:mr-[28rem]' : ''}`}>
                 <h2 className="text-3xl font-bold mb-6">Tabela de Números</h2>
-                <div className="w-full max-w-5xl">
-                    {Object.entries(BINGO_COLUMNS).map(([label, [start, end]]) => (
-                        <div key={label} className="flex items-center mb-2">
-                            <div className="bingo-label-custom bg-gray-700 rounded-full mr-2 shadow-md">
-                                {label}
-                            </div>
-                            <div className="flex flex-wrap flex-1 gap-1">
-                                {Array.from({ length: end - start + 1 }, (_, i) => start + i).map(number => {
-                                    const isDrawn = gameState.drawnNumbers.includes(number);
-                                    const isLast = number === gameState.lastDrawnNumber;
+                <div className="w-full max-w-none px-8">
+                    {Object.entries(BINGO_COLUMNS).map(([label, [start, end]]) => {
+                        const range = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+                        const isColumnComplete = range.every(num => gameState.drawnNumbers.includes(num));
 
-                                    return (
-                                        <div
-                                            key={number}
-                                            className={`
-                                                w-12 h-12 flex items-center justify-center rounded-full text-lg font-bold shadow-md
-                                                ${isDrawn ? 'bg-yellow-500 text-black' : 'bg-gray-700 text-white'}
-                                                ${isLast ? 'ring-4 ring-yellow-300 ring-offset-2 ring-offset-gray-900' : ''}
-                                            `}
-                                        >
-                                            {number}
-                                        </div>
-                                    );
-                                })}
+                        return (
+                            <div key={label} className="flex items-center mb-6 gap-x-8">
+                                <div className={`bingo-label-custom !w-24 !h-24 !text-4xl rounded-full shadow-md transition-all duration-500 flex items-center justify-center ${isColumnComplete ? 'bg-gradient-to-br from-yellow-400 to-yellow-600 text-black font-extrabold scale-110 ring-2 ring-yellow-300' : 'bg-gray-700'}`}>
+                                    {label}
+                                </div>
+                                <div className="flex flex-nowrap flex-1 justify-between gap-2">
+                                    {range.map(number => {
+                                        const isDrawn = gameState.drawnNumbers.includes(number);
+                                        const isLast = number === gameState.lastDrawnNumber;
+
+                                        return (
+                                            <div
+                                                key={number}
+                                                className={`
+                                                    flex-1 aspect-square max-w-[80px] flex items-center justify-center rounded-full font-bold shadow-md transition-all duration-300
+                                                    ${isDrawn ? 'bg-yellow-500 text-black scale-105' : 'bg-gray-700 text-white'}
+                                                    ${isLast ? 'ring-4 ring-yellow-300 ring-offset-2 ring-offset-gray-900 scale-110 z-10' : ''}
+                                                `}
+                                                style={{ fontSize: 'min(2vw, 1.5rem)' }}
+                                            >
+                                                {number}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
 
-                {/* Drawn Numbers Display */}
-                {gameState.drawnNumbers.length > 0 && (
-                    <div className="mt-8 pt-6 border-t border-gray-700 w-full max-w-5xl">
-                        <h2 className="text-3xl font-bold mb-4 text-center">Números Sorteados</h2>
-                        <div className="flex flex-wrap justify-center gap-2">
-                            {gameState.drawnNumbers.sort((a, b) => a - b).map(number => (
-                                <div
-                                    key={`drawn-${number}`}
-                                    className="w-12 h-12 flex items-center justify-center rounded-full text-lg font-bold bg-yellow-500 text-black shadow-md"
-                                >
-                                    {number}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-            </main>
+
+            </main >
             {/* Sliding Drawer Panel */}
-            <div
+            < div
                 className={`fixed right-0 top-0 h-full w-full md:w-[28rem] bg-gray-800 shadow-2xl transform transition-transform duration-300 z-50 ${isPlayerPanelOpen ? 'translate-x-0' : 'translate-x-full'
                     }`}
             >
                 {/* Close Button Header - visible mainly on mobile or as standard UI */}
-                <div className="flex justify-between items-center p-4 border-b border-gray-700">
+                < div className="flex justify-between items-center p-4 border-b border-gray-700" >
                     <h2 className="text-xl font-bold">Minha Cartela</h2>
                     <button onClick={() => setIsPlayerPanelOpen(false)} className="text-gray-400 hover:text-white">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
-                </div>
+                </div >
 
                 <div className="h-[calc(100%-60px)] overflow-y-auto">
                     {player?.card
@@ -372,8 +379,8 @@ export default function Home() {
                         : <PlayerSubmissionPanel onClose={() => setIsPlayerPanelOpen(false)} />
                     }
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }
 

@@ -33,7 +33,8 @@ const loadGame = (): GameState => {
       four_corners: true,
       quina: { enabled: true, horizontal: true, vertical: true, diagonal: true },
       terco: { enabled: true, horizontal: true, vertical: true, diagonal: true }
-    }
+    },
+    players: {}
   };
 };
 
@@ -50,10 +51,14 @@ interface SocketResponse extends NextApiResponse {
 }
 
 // Game state interfaces
+// Game state interfaces
 interface Player {
   id: string;
+  socketId: string;
+  name: string;
   card?: BingoCard;
   cardImage?: string;
+  online: boolean;
 }
 
 interface BingoCard {
@@ -79,14 +84,17 @@ interface GameState {
   remainingNumbers: number[];
   lastDrawnNumber: number | null;
   winningPatterns: WinningPatternsConfig;
+  players: Record<string, Player>; // Persistence
 }
 
 // In-memory "database"
-const players = new Map<string, Player>();
+let players = new Map<string, Player>();
+const socketToPlayerId = new Map<string, string>();
 
 // Helper to handle loading with legacy check
 const loadInitialState = (): GameState => {
   const state = loadGame();
+
   // Migration logic: Check if pattern config is missing or uses old boolean format
   if (!state.winningPatterns || typeof (state.winningPatterns as any).quina === 'boolean') {
     state.winningPatterns = {
@@ -96,14 +104,32 @@ const loadInitialState = (): GameState => {
       terco: { enabled: true, horizontal: true, vertical: true, diagonal: true }
     };
   }
+
+  // Load players from state
+  if (state.players) {
+    Object.values(state.players).forEach(p => {
+      // Reset socketId and online status on load
+      p.online = false;
+      players.set(p.id, p);
+    });
+  } else {
+    state.players = {};
+  }
+
   return state;
 };
 
 let gameState: GameState = loadInitialState();
 
+const persistState = () => {
+  // Convert Map to Record
+  gameState.players = Object.fromEntries(players);
+  saveGame(gameState);
+};
+
 export default function socketHandler(req: NextApiRequest, res: SocketResponse) {
   if (res.socket.server.io) {
-    console.log("Socket is already running");
+    // console.log("Socket is already running");
     res.end();
     return;
   }
@@ -116,34 +142,68 @@ export default function socketHandler(req: NextApiRequest, res: SocketResponse) 
   res.socket.server.io = io;
 
   io.on("connection", (socket: Socket) => {
-    console.log(`New client connected: ${socket.id}`);
+    console.log(`New connection: ${socket.id}`);
 
-    // Create a new player
-    const newPlayer: Player = { id: socket.id };
-    players.set(socket.id, newPlayer);
+    socket.on("registerPlayer", (data: { playerId: string, name?: string }) => {
+      const { playerId, name } = data;
+      let player = players.get(playerId);
+      let isNew = false;
 
-    // Send the current game state to the new client
-    socket.emit("gameState", gameState);
-    // Send the current list of players to the new client
-    socket.emit("players", Array.from(players.values()));
-    // Broadcast the new player to all other clients
-    socket.broadcast.emit("newPlayer", newPlayer);
+      if (player) {
+        // Reconnection
+        console.log(`Player reconnected: ${player.name} (${playerId})`);
+        player.socketId = socket.id;
+        player.online = true;
+        if (name) player.name = name;
+      } else {
+        // New Player
+        console.log(`New player attempt: ${playerId}`);
+        isNew = true;
+        player = {
+          id: playerId,
+          socketId: socket.id,
+          name: name || `Jogador ${playerId.slice(0, 4)}`,
+          online: true
+        };
+        players.set(playerId, player);
+      }
+
+      socketToPlayerId.set(socket.id, playerId);
+      persistState();
+
+      // Send current state to THIS client
+      socket.emit("gameState", gameState);
+      socket.emit("players", Array.from(players.values()));
+
+      // Broadcast
+      if (isNew) {
+        socket.broadcast.emit("newPlayer", player);
+      } else {
+        io.emit("playerUpdated", player);
+      }
+    });
 
     socket.on("disconnect", () => {
-      console.log(`Client disconnected: ${socket.id}`);
-      players.delete(socket.id);
-      io.emit("playerDisconnected", socket.id);
+      const playerId = socketToPlayerId.get(socket.id);
+      if (playerId) {
+        const player = players.get(playerId);
+        if (player) {
+          player.online = false;
+          io.emit("playerUpdated", player);
+          persistState();
+          console.log(`Player offline: ${player.name}`);
+        }
+        socketToPlayerId.delete(socket.id);
+      }
     });
 
     socket.on("drawNumber", (data?: { password?: string }) => {
       const adminPassword = process.env.ADMIN_PASSWORD || 'admin';
       if (data?.password !== adminPassword) {
-        console.log(`Unauthorized draw attempt from ${socket.id}`);
         socket.emit("error", { message: "Unauthorized" });
         return;
       }
 
-      console.log("Command received: drawNumber");
       if (gameState.remainingNumbers.length > 0) {
         const randomIndex = Math.floor(Math.random() * gameState.remainingNumbers.length);
         const drawnNumber = gameState.remainingNumbers[randomIndex];
@@ -154,41 +214,32 @@ export default function socketHandler(req: NextApiRequest, res: SocketResponse) 
         );
         gameState.lastDrawnNumber = drawnNumber;
 
-        console.log(`Number drawn: ${drawnNumber}, Remaining: ${gameState.remainingNumbers.length}`);
-
-        saveGame(gameState);
+        persistState();
 
         io.emit("numberDrawn", {
           drawnNumber,
           gameState,
         });
-      } else {
-        console.log("No numbers remaining to draw.");
       }
     });
 
     socket.on("resetGame", (data?: { password?: string }) => {
       const adminPassword = process.env.ADMIN_PASSWORD || 'admin';
       if (data?.password !== adminPassword) {
-        console.log(`Unauthorized reset attempt from ${socket.id}`);
         socket.emit("error", { message: "Unauthorized" });
         return;
       }
 
-      console.log("Command received: resetGame");
-      gameState = {
-        drawnNumbers: [],
-        remainingNumbers: Array.from({ length: 75 }, (_, i) => i + 1),
-        lastDrawnNumber: null,
-        winningPatterns: gameState.winningPatterns
-      };
-      // also clear all player cards
+      gameState.drawnNumbers = [];
+      gameState.remainingNumbers = Array.from({ length: 75 }, (_, i) => i + 1);
+      gameState.lastDrawnNumber = null;
+
+      // Reset cards but KEEP players and names
       players.forEach(p => {
         p.card = undefined;
         p.cardImage = undefined;
       });
-
-      saveGame(gameState);
+      persistState();
 
       io.emit("gameReset", gameState);
       io.emit("players", Array.from(players.values()));
@@ -201,21 +252,22 @@ export default function socketHandler(req: NextApiRequest, res: SocketResponse) 
         return;
       }
       gameState.winningPatterns = data.patterns;
-      saveGame(gameState);
+      persistState();
       io.emit("gameState", gameState);
     });
 
-    socket.on("getPlayer", (playerId: string, callback: (player: Player | null) => void) => {
-      const player = players.get(playerId);
-      callback(player ?? null);
-    });
+    socket.on("updateCard", (cardData: { card: BingoCard, cardImage: string, name?: string }) => {
+      const playerId = socketToPlayerId.get(socket.id);
+      if (playerId) {
+        const player = players.get(playerId);
+        if (player) {
+          player.card = cardData.card;
+          player.cardImage = cardData.cardImage;
+          if (cardData.name) player.name = cardData.name;
 
-    socket.on("updateCard", (cardData: { card: BingoCard, cardImage: string }) => {
-      const player = players.get(socket.id);
-      if (player) {
-        player.card = cardData.card;
-        player.cardImage = cardData.cardImage;
-        io.emit("playerUpdated", player);
+          io.emit("playerUpdated", player);
+          persistState();
+        }
       }
     });
 

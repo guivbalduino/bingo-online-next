@@ -17,6 +17,14 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const [playerId, setPlayerId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Generate or retrieve persistent Player ID
+    let storedId = localStorage.getItem('bingo_playerId');
+    if (!storedId) {
+      storedId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+      localStorage.setItem('bingo_playerId', storedId);
+    }
+    setPlayerId(storedId);
+
     // Initialize the socket
     const socketInstance = io({
       path: "/api/socket",
@@ -28,7 +36,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
     socketInstance.on("connect", () => {
       console.log("Socket connected:", socketInstance.id);
-      setPlayerId(socketInstance.id || null);
+      // Do not overwrite persistent ID with socket ID
     });
 
     socketInstance.on("disconnect", () => {

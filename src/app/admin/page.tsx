@@ -13,6 +13,8 @@ interface Player {
     id: string;
     card?: BingoCard;
     cardImage?: string;
+    name?: string;
+    online?: boolean;
 }
 
 interface DirectionalPattern {
@@ -49,13 +51,29 @@ export default function AdminPage() {
 
 
     useEffect(() => {
-        const auth = document.cookie.includes('admin_session=true');
-        if (auth) {
-            setIsAuthenticated(true);
-            const storedPass = sessionStorage.getItem('admin_password');
-            if (storedPass) {
-                setVerifiedPassword(storedPass);
+        // Aggressive persistence check
+        const checkAuth = () => {
+            const local = localStorage.getItem('admin_password');
+            const session = sessionStorage.getItem('admin_password');
+
+            if (local) return local;
+            if (session) return session;
+
+            // Check cookies as last resort
+            if (document.cookie.includes('admin_session=true')) {
+                // return 'admin'; // Assume default if cookie exists but no pass? Risky.
             }
+            return null;
+        };
+
+        const stored = checkAuth();
+        if (stored) {
+            setVerifiedPassword(stored);
+            setIsAuthenticated(true);
+
+            // Sync storages
+            if (!localStorage.getItem('admin_password')) localStorage.setItem('admin_password', stored);
+            if (!sessionStorage.getItem('admin_password')) sessionStorage.setItem('admin_password', stored);
         }
     }, []);
 
@@ -105,11 +123,20 @@ export default function AdminPage() {
     }, [socket]);
 
     const handleAuth = () => {
-        if (password === 'admin' || password === (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'admin')) {
-            setIsAuthenticated(true);
+        const adminPass = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'admin';
+        if (password === 'admin' || password === adminPass) {
+
+            // Save everywhere to be sure
+            try {
+                localStorage.setItem('admin_password', password);
+                sessionStorage.setItem('admin_password', password);
+            } catch (e) {
+                console.error("Storage failed", e);
+            }
+            document.cookie = "admin_session=true; path=/; max-age=31536000";
+
             setVerifiedPassword(password);
-            sessionStorage.setItem('admin_password', password);
-            document.cookie = "admin_session=true; path=/; max-age=3600";
+            setIsAuthenticated(true);
             setPassword('');
         } else {
             alert('Incorrect password');
@@ -236,7 +263,13 @@ export default function AdminPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {players.map(player => (
                             <div key={player.id} className="bg-gray-700 rounded-lg p-4 flex flex-col gap-4">
-                                <p className="text-xs text-gray-400 truncate">Player ID: {player.id}</p>
+                                <div className="flex justify-between items-start mb-2">
+                                    <div>
+                                        <h3 className="font-bold text-lg text-white">{player.name || `Jogador ${player.id.slice(0, 4)}`}</h3>
+                                        <p className="text-xs text-gray-400 truncate w-40" title={player.id}>ID: {player.id}</p>
+                                    </div>
+                                    <div className={`w-3 h-3 rounded-full ${player.online !== false ? 'bg-green-500' : 'bg-red-500'}`} title={player.online !== false ? "Online" : "Offline"} />
+                                </div>
                                 {player.cardImage && (
                                     <div className="w-full h-40 overflow-hidden rounded-md">
                                         <img src={player.cardImage} alt="Player Card" className="w-full h-full object-cover" />

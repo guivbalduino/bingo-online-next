@@ -244,17 +244,84 @@ export default function CardVerificationGrid({ initialNumbers, onSave, onCancel 
         const id = `cell-${r}-${c}`;
         const { setNodeRef, isOver } = useDroppable({ id });
 
+        const handleCellClick = (e: React.MouseEvent) => {
+            // Prevent triggering when finishing a drag
+            e.stopPropagation();
+
+            if (r === 2 && c === 2) return;
+
+            const colInfo = BINGO_COLUMNS[c];
+            const input = prompt(`Digite o número para coluna ${colInfo.label} (${colInfo.min}-${colInfo.max}):`, number ? String(number) : '');
+
+            if (input !== null) {
+                const newGrid = grid.map(row => [...row]);
+                const newAvailable = JSON.parse(JSON.stringify(availableNumbers));
+
+                if (input.trim() === '') {
+                    // Clear cell: Return old number to bank if it exists
+                    if (number) {
+                        newAvailable[colInfo.label].push(number);
+                        newAvailable[colInfo.label].sort((a: number, b: number) => a - b);
+                    }
+                    newGrid[r][c] = null;
+
+                    setAvailableNumbers(newAvailable);
+                    setGrid(newGrid);
+                    return;
+                }
+
+                const num = parseInt(input.trim());
+                if (isNaN(num)) return;
+
+                if (num < colInfo.min || num > colInfo.max) {
+                    alert(`Número inválido! Para a coluna ${colInfo.label}, deve ser entre ${colInfo.min} e ${colInfo.max}.`);
+                    return;
+                }
+
+                // Check duplicates in GRID
+                if (grid.some((row, rIdx) => row.some((n, cIdx) => n === num && (rIdx !== r || cIdx !== c)))) {
+                    alert("Este número já existe na cartela!");
+                    return;
+                }
+
+                // Update Bank State
+                // 1. Return old number to bank
+                if (number && number !== num) {
+                    newAvailable[colInfo.label].push(number);
+                }
+
+                // 2. Remove new number from bank (if present) to prevent duplicates
+                newAvailable[colInfo.label] = newAvailable[colInfo.label].filter((n: number) => n !== num);
+
+                // Sort
+                newAvailable[colInfo.label].sort((a: number, b: number) => a - b);
+
+                newGrid[r][c] = num;
+
+                setAvailableNumbers(newAvailable);
+                setGrid(newGrid);
+            }
+        };
+
         const content = number ? (
             <Draggable id={id} data={{ number }}>
-                <div className="w-12 h-12 flex items-center justify-center font-bold text-lg cursor-grab bg-gray-800 rounded-md">
+                <div
+                    className="w-12 h-12 flex items-center justify-center font-bold text-lg cursor-pointer bg-gray-800 rounded-md hover:bg-gray-750 border border-gray-600"
+                    title="Clique para editar ou arraste para mover"
+                >
                     {number}
                 </div>
             </Draggable>
         ) : null;
 
         return (
-            <div ref={setNodeRef} className={`w-12 h-12 rounded-md ${isOver ? 'bg-blue-900' : 'bg-gray-600'}`}>
-                {content}
+            <div
+                ref={setNodeRef}
+                onClick={handleCellClick}
+                className={`w-12 h-12 rounded-md ${isOver ? 'bg-blue-900' : 'bg-gray-600'} flex items-center justify-center cursor-pointer hover:bg-gray-500 transition-colors`}
+                title="Clique para adicionar número"
+            >
+                {content || <span className="text-gray-400 text-2xl pb-1">+</span>}
             </div>
         );
     };
@@ -263,7 +330,9 @@ export default function CardVerificationGrid({ initialNumbers, onSave, onCancel 
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <div className="flex flex-col items-center gap-4 p-4 bg-gray-700 rounded-lg w-full">
                 <h3 className="text-xl font-bold">Verifique sua Cartela</h3>
-                <p className="text-center text-sm text-gray-300 mb-2">Arraste os números para a posição correta.</p>
+                <p className="text-center text-sm text-gray-300 mb-2">
+                    Arraste para mover ou <strong className="text-yellow-400">clique nos quadrados</strong> para digitar/editar.
+                </p>
 
                 {/* Grid */}
                 <div className="grid grid-cols-5 gap-1 mb-6">
